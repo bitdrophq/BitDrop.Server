@@ -35,3 +35,5 @@ func Init() error {
 	fmt.Println("✅ Connected to database.")
 	return nil
 }
+
+// test
