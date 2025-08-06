@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -21,7 +22,20 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	r := gin.Default()
+	// Create or open the log file in append mode
+	logFile, err := os.OpenFile("gin.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatalf("Could not open log file: %v", err)
+	}
+	defer logFile.Close()
+
+	// Write logs to both terminal and file
+	gin.DefaultWriter = io.MultiWriter(os.Stdout, logFile)
+
+	// Initialize Gin engine with logger and recovery
+	r := gin.New()
+	r.Use(gin.Logger())
+	r.Use(gin.Recovery())
 
 	// Public route
 	r.GET("/ping", func(c *gin.Context) {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/richiethie/BitDrop.Server/internal/db"
 	"github.com/richiethie/BitDrop.Server/internal/models"
+	"github.com/richiethie/BitDrop.Server/internal/utils"
 )
 
 func SignUp(c *gin.Context) {
@@ -105,16 +106,22 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// Check password
 	if err := bcrypt.CompareHashAndPassword([]byte(storedHashedPassword), []byte(req.Password)); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
 		return
 	}
 
-	// TODO: Generate and return access token if implementing JWT
+	// ✅ Generate JWT
+	token, err := utils.GenerateJWT(user.ID, user.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		return
+	}
+
+	// ✅ Return token and user
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Login successful",
-		"user":    user,
+		"token": token,
+		"user":  user,
 	})
 }
 

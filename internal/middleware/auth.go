@@ -26,14 +26,28 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Supabase JWTs use HS256 and are signed with your project's anon or service key
-		secret := os.Getenv("SUPABASE_JWT_SECRET")
-		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		var token *jwt.Token
+		var err error
+
+		// Attempt verification with custom JWT secret
+		customSecret := os.Getenv("JWT_SECRET")
+		token, err = jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
-			return []byte(secret), nil
+			return []byte(customSecret), nil
 		})
+
+		// If custom JWT fails, try Supabase secret
+		if err != nil || !token.Valid {
+			supabaseSecret := os.Getenv("SUPABASE_JWT_SECRET")
+			token, err = jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+				}
+				return []byte(supabaseSecret), nil
+			})
+		}
 
 		if err != nil || !token.Valid {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
@@ -41,19 +55,29 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok || claims["sub"] == nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid claims"})
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
 			return
 		}
 
-		// Optionally: check token expiry
+		// Accept `user_id` (custom) or `sub` (Supabase)
+		var userId string
+		if val, ok := claims["user_id"].(string); ok && val != "" {
+			userId = val
+		} else if val, ok := claims["sub"].(string); ok && val != "" {
+			userId = val
+		} else {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing user ID in token"})
+			return
+		}
+
+		// Check expiration
 		if exp, ok := claims["exp"].(float64); ok && time.Now().Unix() > int64(exp) {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Token expired"})
 			return
 		}
 
-		// Store user ID in context
-		c.Set("userId", claims["sub"])
+		c.Set("userId", userId)
 		c.Next()
 	}
 }
