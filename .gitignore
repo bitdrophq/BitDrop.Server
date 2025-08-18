@@ -15,10 +15,6 @@
 # Dependency directories (vendor for Go modules)
 vendor/
 
-# Go workspace files
-*.mod
-*.sum
-
 # IDE/editor configs
 .vscode/
 .idea/
